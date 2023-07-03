@@ -20,24 +20,6 @@
 #include <Arduino_LPS22HB.h> //Click here to get the library: https://www.arduino.cc/reference/en/libraries/arduino_lps22hb/
 #include <Arduino_HTS221.h> //Click here to get the library: https://www.arduino.cc/reference/en/libraries/arduino_hts221/
 #include <Arduino_APDS9960.h> //Click here to get the library: https://www.arduino.cc/reference/en/libraries/arduino_apds9960/
-#include <ArduinoBLE.h>
-
-// Global Variables
-
-float threshold = 10;
-float confidence = 0.8;
-bool flag = false;
-String Label;
-
-//Blutooth service activating
-
-BLEService fitness_service("e267751a-ae76-11eb-8529-0242ac130003");
-
-BLEIntCharacteristic exercise("2A19", BLERead | BLENotify); 
-BLEByteCharacteristic start("19b10012-e8f2-537e-4f6c-d104768a1214", BLERead | BLEWrite);
-BLEByteCharacteristic pause("6995b940-b6f4-11eb-8529-0242ac130003", BLERead | BLEWrite);
-
-BLEDevice central;
 
 enum sensor_status {
     NOT_USED = -1,
@@ -131,50 +113,6 @@ void setup()
         ei_printf("ERR: Errors in sensor list detected\r\n");
         return;
     }
-if (!BLE.begin()) {
-      Serial.println("starting BLE failed!");
-
-      while (1);
-    }
-
-    // BLE spremenljivke
-
-    BLE.setLocalName("Get-Fit");
-    
-    BLE.setAdvertisedService(fitness_service);
-
-    //Karakteristike
-    
-    start.setValue(0);
-    pause.setValue(0);
-
-    
-    fitness_service.addCharacteristic(exercise); 
-    fitness_service.addCharacteristic(start);
-    fitness_service.addCharacteristic(pause);
-
-
-
-    BLE.addService(fitness_service);
-
-    BLE.advertise();
-
-    Serial.println("Bluetooth device active, waiting for connections...");
-
-    while(1) {
-      Serial.println("HELLO");
-      central = BLE.central();
-      // if First negotiation with arduino and ble (via app) goes well then runs this loop that flashes LED, then breaks
-      if (central) {
-        Serial.print("Connected to central: ");
-        // print the central's BT address:
-        Serial.println(central.address());
-        // turn on the LED to indicate the connection:
-        digitalWrite(LED_BUILTIN, HIGH);
-
-        break;
-      }
-    }
 
     /* Init & start sensors */
 
@@ -196,30 +134,9 @@ if (!BLE.begin()) {
 */
 void loop()
 {
-  if (central.connected()) 
-    {
-        start.read();
-        pause.read();
-    }
-    if (start.value()) 
-    {
-        flag = true;
-        //Serial.println("Started");
-        start.setValue(0);
-    }
-    if(pause.value()) 
-    {
-         flag = false;
-         //Serial.println("Stopped");
-         pause.setValue(0);
-    }
     ei_printf("\nStarting inferencing in 2 seconds...\r\n");
-    if(flag == false)
-    {
-      return;
-    }
 
-    delay(500);
+    delay(2000);
 
     if (EI_CLASSIFIER_RAW_SAMPLES_PER_FRAME != fusion_ix) {
         ei_printf("ERR: Sensors don't match the sensors required in the model\r\n"
@@ -277,42 +194,8 @@ void loop()
     for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
         ei_printf("%s: %.5f\r\n", result.classification[ix].label, result.classification[ix].value);
     }
-#if 1//EI_CLASSIFIER_HAS_ANOMALY == 1
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
     ei_printf("    anomaly score: %.3f\r\n", result.anomaly);
-    if(result.anomaly < threshold)
-        {
-            for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++)  
-              {      
-                 ei_printf("    %s: %.5f\n", result.classification[ix].label, result.classification[ix].value); 
-                 //ei_printf("Test");
-                 if(result.classification[ix].value > confidence )
-                 {
-                     Label = String(result.classification[ix].label);
-                     Serial.println(Label);
-                     if (Label == "Juggling")
-                     {
-                      //  Serial.println("Counter One Incremented");
-                      //  counterOne += 1;
-                       if (central.connected()) exercise.writeValue(0);
-                       Serial.println("Data sent");
-                     }
-                     else if (Label == "StillMovement")
-                     {
-                      //  Serial.println("Counter Two Incremented");
-                       //counterTwo += 1;
-                       //if (central.connected()) exercise.writeValue(2);
-                       //Serial.println("Data sent");
-                     }
-                      else if (Label == "NotJugglingButArmRaises")
-                     {
-                      //  Serial.println("Counter Two Incremented");
-                       //counterTwo += 1;
-                       //if (central.connected()) exercise.writeValue(2);
-                       //Serial.println("Data sent");
-                     }
-                  }
-               }
-         }        
 #endif
 }
 
